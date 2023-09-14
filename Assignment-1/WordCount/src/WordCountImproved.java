@@ -24,11 +24,11 @@ public class WordCountImproved extends Configured implements Tool {
 
         private final static LongWritable one = new LongWritable(1);
         private Text word = new Text();
+        Pattern word_sep = Pattern.compile("[\\p{Punct}\\s]+");     // The pattern we wish to match around
 
         @Override
         public void map(LongWritable key, Text value, Context context
         ) throws IOException, InterruptedException {
-            Pattern word_sep = Pattern.compile("[\\p{Punct}\\s]+");     // The pattern we wish to match around
             String[] tokens = word_sep.split(value.toString().toLowerCase());         // Parse input -> array of String tokens
             for (String token : tokens) {
                 if (!token.isEmpty()) {

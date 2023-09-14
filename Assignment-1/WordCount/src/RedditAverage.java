@@ -15,27 +15,30 @@ import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 
+import org.json.JSONObject;
+
 public class RedditAverage extends Configured implements Tool {
 
     public static class TokenizerMapper
-            extends Mapper<LongWritable, Text, Text, IntWritable>{
+            extends Mapper<LongWritable, Text, Text, LongPairWritable>{
 
-        private final static IntWritable one = new IntWritable(1);
         private Text word = new Text();
+        private final static Long one = Long.valueOf(1L);
+        private LongPairWritable pair = new LongPairWritable();
 
         @Override
         public void map(LongWritable key, Text value, Context context
         ) throws IOException, InterruptedException {
-            StringTokenizer itr = new StringTokenizer(value.toString());
-            while (itr.hasMoreTokens()) {
-                word.set(itr.nextToken());
-                context.write(word, one);
-            }
+            JSONObject record = new JSONObject(value.toString());
+            word.set(record.get("subreddit").toString());
+            Long score = Long.valueOf(record.get("score").toString());
+            pair.set(score, one);
+            context.write(word, pair);
         }
     }
 
     public static class IntSumReducer
-            extends Reducer<Text, IntWritable, Text, IntWritable> {
+            extends Reducer<Text, LongPairWritable, Text, IntWritable> {
         private IntWritable result = new IntWritable();
 
         @Override
@@ -52,7 +55,7 @@ public class RedditAverage extends Configured implements Tool {
     }
 
     public static void main(String[] args) throws Exception {
-        int res = ToolRunner.run(new Configuration(), new WordCount(), args);
+        int res = ToolRunner.run(new Configuration(), new RedditAverage(), args);
         System.exit(res);
     }
 
@@ -60,16 +63,16 @@ public class RedditAverage extends Configured implements Tool {
     public int run(String[] args) throws Exception {
         Configuration conf = this.getConf();
         Job job = Job.getInstance(conf, "word count");
-        job.setJarByClass(WordCount.class);
+        job.setJarByClass(RedditAverage.class);
 
         job.setInputFormatClass(TextInputFormat.class);
 
         job.setMapperClass(TokenizerMapper.class);
-        job.setCombinerClass(IntSumReducer.class);
-        job.setReducerClass(IntSumReducer.class);
+        //job.setCombinerClass(IntSumReducer.class);
+        //job.setReducerClass(IntSumReducer.class);
 
         job.setOutputKeyClass(Text.class);
-        job.setOutputValueClass(IntWritable.class);
+        job.setOutputValueClass(LongPairWritable.class);
         job.setOutputFormatClass(TextOutputFormat.class);
         TextInputFormat.addInputPath(job, new Path(args[0]));
         TextOutputFormat.setOutputPath(job, new Path(args[1]));

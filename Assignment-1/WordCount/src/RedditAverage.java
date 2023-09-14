@@ -14,6 +14,8 @@ import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
+import org.apache.hadoop.io.DoubleWritable;
+
 
 import org.json.JSONObject;
 
@@ -38,18 +40,21 @@ public class RedditAverage extends Configured implements Tool {
     }
 
     public static class IntSumReducer
-            extends Reducer<Text, LongPairWritable, Text, IntWritable> {
-        private IntWritable result = new IntWritable();
+            extends Reducer<Text, LongPairWritable, Text, DoubleWritable> {
+        private DoubleWritable result = new DoubleWritable();
 
         @Override
-        public void reduce(Text key, Iterable<IntWritable> values,
+        public void reduce(Text key, Iterable<LongPairWritable> pairs,
                            Context context
         ) throws IOException, InterruptedException {
-            int sum = 0;
-            for (IntWritable val : values) {
-                sum += val.get();
+            Double count = 0.0;
+            Double sum_score = 0.0;
+            for (LongPairWritable pair : pairs) {
+                sum_score += pair.get_0();
+                count += pair.get_1();
             }
-            result.set(sum);
+            Double average = sum_score / count;
+            result.set(average);
             context.write(key, result);
         }
     }
@@ -69,7 +74,7 @@ public class RedditAverage extends Configured implements Tool {
 
         job.setMapperClass(TokenizerMapper.class);
         //job.setCombinerClass(IntSumReducer.class);
-        //job.setReducerClass(IntSumReducer.class);
+        job.setReducerClass(IntSumReducer.class);
 
         job.setOutputKeyClass(Text.class);
         job.setOutputValueClass(LongPairWritable.class);

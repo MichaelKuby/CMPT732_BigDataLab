@@ -25,15 +25,3 @@ Run Locally:
 	Read output:
 	less output-1/part-*
 	less wordsep-output-1/part-*
-
-#### JSON Input & Reddit Comments ####
-
-To compile with the JSON JAR file and LongPairWritable
-
-	export HADOOP_CLASSPATH=./json-20180813.jar
-	${JAVA_HOME}/bin/javac -classpath `${HADOOP_HOME}/bin/hadoop classpath` LongPairWritable.java RedditAverage.java
-	${JAVA_HOME}/bin/jar cf a1.jar *.class
-
-To run locally
-
-	${HADOOP_HOME}/bin/yarn jar a1.jar RedditAverage reddit-1 redditoutput-1

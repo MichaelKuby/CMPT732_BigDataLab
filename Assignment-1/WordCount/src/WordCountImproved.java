@@ -31,7 +31,7 @@ public class WordCountImproved extends Configured implements Tool {
         ) throws IOException, InterruptedException {
             String[] tokens = word_sep.split(value.toString().toLowerCase());         // Parse input -> array of String tokens
             for (String token : tokens) {
-                if (!token.isEmpty()) {
+                if (!token.isEmpty()) { // ignore empty strings
                     word.set(token);
                     context.write(word, one);
                 }

@@ -1,36 +1,62 @@
-1.	How did the output change when you submitted with -D mapreduce.job.reduces=3?
+1.      How did the output change when you submitted with -D mapreduce.job.reduces=3?
 
 With a single reducer, each (key, 1) pair from every line of all input files is aggregated to produce the final output of (key, n), 
 where n is the total number of occurrences of that key across all files.
 
-When setting -D mapreduce.job.reduces=3, the number of reducers is increased to three. Consequently, the output data is partitioned 
-into three separate output files within the same output directory. Each of these files contains the output of one 
-reducer's aggregation operation.
+When setting -D mapreduce.job.reduces=3, the output data is partitioned into three separate output files within the same output 
+directory. Each of these files contains the output of one reducer's aggregation operation. Since the data is partitioned, it's possible 
+that the same key may appear in multiple output files. For example, directory A's output file may contain (key, n), and directory B's 
+output file may contain (key, m). In the case of wordcount, If these were to be further reduced, the final result would be (key, m+n), 
+which is what we'd expect with a single reducer.
 
-It should be noted that, since the data is partitioned, it's possible that the same key might appear in multiple output files. For 
-example, directory A's output file may contain (key, n) and directory B's output file may contain (key, m). If these were to be
-combined, the final result would be (key, m+n), which is what we'd expect with a single reducer.
+        Why would this be necessary if your job produced large output sets?
 
-	Why would this be necessary if your job produced large output sets?
+If the output sets are big enough, reducing efficiently with a single reducer may be infeasible because the shuffle operation requires 
+compiling all (key, value) pairings with the same key together. I.e., data partitioned across different nodes must shuffle their data 
+across the network onto the same node to perform the reduce step. Since we are considering a situation where large output sets are 
+produced, this may require more memory than is available, or may be considerably more inefficient than doing multiple aggregation 
+steps.
 
-If the output sets are big enough, it may be infeasible to reduce efficiently with a single reducer, because the shuffle operation 
-requires combining each of the (key, value) pairings together. This may require more memory than is available, or may be considerably 
-more inefficient than doing multiple aggregation steps.
+The fundamental idea here is that by using multiple reducers we can parallelize the reduction step, allowing each reducer to work on 
+different sets of keys simultaneously. The tradeoff is that we may need to include another aggregation step.
 
-By using multiple reducers we can parallelize the reduction step, allowing each of the reducers to work on different sets of keys at 
-the same time. The tradeoff is that we may need to include another aggregation step.
+Importantly, the use of multiple reducers allows for scalability. If the amount of data grows, we can scale as necessary.
 
-This also allows for scalability. If the amount of data grows, we're able to scale as necessary.
+2.	How was the -D mapreduce.job.reduces=0 output different?
 
-2. 	How was the -D mapreduce.job.reduces=0 output different?
+Setting the number of reducers to zero skips the reduce phase, so the output is what is produced by the mappers. Since the mappers 
+return (Text, 1) in the case of wordcount, and (Text, LongPairWritable) in the case of RedditAverage, the results of this preliminary 
+step is what we see in the output files: the raw, unaggregated pairs. Interestingly, the number of mappers depends on the number of 
+files supplied as input to the MapReduce program.
 
-Setting the number of reducers to zero essentially skips the reduce phase, and the output is directly written from the mappers to the 
-HDFS.
+If a combiner is used, each file contains aggregated key-value pairs in the form of (key, n), where n represents the result of the 
+computation done in the combiner step, which takes the output from each mapper and does a preliminary reduce. Note that when using a 
+combiner without a reduce operation, the result is the aggregation performed on each mappers output. Hence, the keys wouldn't 
+necessarily be unique when considering the concatenated output from all files; however, keys would now be locally unique to each 
+mapper's output.
 
-The output when using -D mapreduce.job.reduces=0 consisted of a single directory containing three separate files. Each file held the 
-output directly from the map phase, mapping input lines of text to (key, 1). In this case, each key represents a parsed token from each 
-line of text. Notably, the keys in each file are not unique since no combining or reducing has been undertaken.
+3.	 Was there any noticeable difference in the running time of your RedditAverage with and without the combiner optimization?
 
-Had a combiner been used, each file would contain aggregated key-value pairs in the form of (key, n), where n represents the number of 
-times a particular key appeared in the data chunk processed by that specific mapper. Note that even with a combiner, the 
-keys wouldn't be unique across the entire dataset; they would only be locally aggregated per mapper's output.
+There was. I ran these times locally and used the zsh time function to monitor the times. The results were as follows:
+
+With no combiner: 
+${HADOOP_HOME}/bin/yarn jar a1.jar RedditAverage reddit-1 output-1 7.44s user 0.77s system 195% cpu 4.193 total 
+${HADOOP_HOME}/bin/yarn jar a1.jar RedditAverage reddit-2 output-2 16.33s user 1.19s system 162% cpu 10.811 total
+
+With the combiner:
+${HADOOP_HOME}/bin/yarn jar a1.jar RedditAverage reddit-1 output-1-combiner  7.29s user 0.78s system 210% cpu 3.826 total
+${HADOOP_HOME}/bin/yarn jar a1.jar RedditAverage reddit-2 output-2-combiner  16.00s user 0.93s system 169% cpu 9.994 total
+
+Reddit-1 output analysis: Here, we see that the total time has been reduced by nearly 10% (3.826 / 4.193 = 0.91) by using the combiner.
+
+Reddit-2 output analysis: Here, we see that the total time again is reduced by around 8% (9.994/10.811 = 0.92). Perhaps most salient is 
+the system time, which saw nearly a 22% reduction (0.93/1.19 = 0.78).
+
+Clearly, the combiner optimization is quite powerful. We could further recognize that as the data size increases, the overhead of 
+shuffling and sorting large amounts of data between map and reduce phases can be significant, so this sort of optimization would prove 
+even more valuable.
+
+In addition, in a distributed environment, reducing the amount of data transferred should yield much better performance (this is in 
+acknowledgement that my times were computed locally).
+
+Finally, when there are more reducers, the benefits of localized combining should be even more apparent.

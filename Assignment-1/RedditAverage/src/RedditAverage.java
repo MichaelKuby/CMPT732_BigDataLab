@@ -29,10 +29,15 @@ public class RedditAverage extends Configured implements Tool {
         public void map(LongWritable key, Text value, Context context
         ) throws IOException, InterruptedException {
             JSONObject record = new JSONObject(value.toString());
-            word.set(record.get("subreddit").toString());
-            Long score = Long.valueOf(record.get("score").toString());
-            pair.set(score, one);
-            context.write(word, pair);
+            if (record.has("subreddit") && record.has("score")) {
+                word.set(record.get("subreddit").toString());
+                Long score = Long.valueOf(record.get("score").toString());
+                pair.set(score, one);
+                context.write(word, pair);
+            } else {
+                // Skip records without 'subreddit' and 'score'
+            }
+
         }
     }
 

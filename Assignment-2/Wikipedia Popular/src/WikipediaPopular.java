@@ -1,4 +1,5 @@
 import java.io.IOException;
+import java.util.Iterator;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
@@ -36,41 +37,23 @@ public class WikipediaPopular extends Configured implements Tool {
         }
     }
 
-//    public static class IntSumReducer
-//            extends Reducer<Text, LongPairWritable, Text, DoubleWritable> {
-//        private DoubleWritable result = new DoubleWritable();
-//
-//        @Override
-//        public void reduce(Text key, Iterable<LongPairWritable> pairs,
-//                           Context context
-//        ) throws IOException, InterruptedException {
-//            double count = 0.0;
-//            double sum_score = 0.0;
-//            for (LongPairWritable pair : pairs) {
-//                sum_score += pair.get_0();
-//                count += pair.get_1();
-//            }
-//            double average = sum_score / count;
-//            result.set(average);
-//            context.write(key, result);
-//        }
-//    }
-//
-    public static class GetMaxCombiner
-        extends Reducer<Text, LongWritable, Text, LongWritable> {
+    public static class GetMaxReducer
+            extends Reducer<Text, LongWritable, Text, LongWritable> {
 
         @Override
         public void reduce(Text key, Iterable<LongWritable> values,
                            Context context
         ) throws IOException, InterruptedException {
-            LongWritable current_max_views = new LongWritable();
-            for (LongWritable val : values) {
-                if (val.get() > current_max_views.get()) {
-                    current_max_views = this_views;
+            long current_max_views = 0;
+            Iterator<LongWritable> iterator = values.iterator();
+            while (iterator.hasNext()) {
+                long current_val = iterator.next().get();
+                if (current_val > current_max_views) {
+                    current_max_views = current_val;
                 }
             }
-
-            context.write(key, current_max_views);
+            LongWritable maxViews = new LongWritable(current_max_views);
+            context.write(key, maxViews);
         }
     }
 
@@ -88,8 +71,8 @@ public class WikipediaPopular extends Configured implements Tool {
         job.setInputFormatClass(TextInputFormat.class);
 
         job.setMapperClass(PageViewMapper.class);
-        //job.setCombinerClass(SumScoreCombiner.class);
-        //job.setReducerClass(IntSumReducer.class);
+        job.setCombinerClass(GetMaxReducer.class);
+        job.setReducerClass(GetMaxReducer.class);
 
         job.setMapOutputKeyClass(Text.class);
         job.setMapOutputValueClass(LongWritable.class);

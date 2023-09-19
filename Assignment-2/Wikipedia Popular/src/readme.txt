@@ -25,7 +25,7 @@ Run Locally:
 
 	In general:
 	${HADOOP_HOME}/bin/yarn jar jarfiletorun.jar class_to_run inputfile outputfile
-	
+
 	In particular:
 	${HADOOP_HOME}/bin/yarn jar WikipediaPopular.jar WikipediaPopular pagecounts-with-time-0 output-0
 

@@ -1,0 +1,25 @@
+1.	In the WikipediaPopular class, it would be much more interesting to find the page that is most popular, not just the view count (as 
+	we did with Spark). What would be necessary to modify your class to do this? (You don't have to actually implement it.)
+
+Much like we did in Assignment-1, it would make sense to use a nested tuple: (datetime, (page, viewcount)) as output during the mapping 
+phase. By keeping this information from the start and maintaining during the combine and reduce stages (again, by outputting a nested 
+tuple as the value), you would ultimately be able to output a result that also shows the page that is most popular along with the 
+viewcount for that hour.
+
+2.	An RDD has many methods: it can do many more useful tricks than were at hand with MapReduce. Write a sentence or two to explain the 
+	difference between .map and .flatMap. Which is more like the MapReduce concept of mapping?
+
+The .map function takes each element x, applies f to it, and outputs a new record, or row, containing the output. In contrast, 
+the .flatMap function takes each element x, applies f to it, then flattens the resulting RDD from an m x n table into a 1 x n table. 
+I.e., the results are flattened into a single record. A simple example illustrates this well:
+
+>>>> rdd = sc.parallelize([2, 3, 4])
+>>>> result_rdd = rdd.flatMap(lambda x: [x,x])
+>>>> result_list = result_rdd.collect()
+>>>> print(result_list)
+[2, 2, 3, 3, 4, 4]				## flatMap has flatted the result into a single record
+>>>> result2_rdd = rdd.map(lambda x: [x,x])
+>>>> result2_list = result2_rdd.collect()
+>>>> print(result2_list)
+[[2, 2], [3, 3], [4, 4]]			## map creates a record for each input
+

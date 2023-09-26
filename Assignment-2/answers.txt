@@ -1,25 +1,88 @@
 1.	In the WikipediaPopular class, it would be much more interesting to find the page that is most popular, not just the view count (as 
 	we did with Spark). What would be necessary to modify your class to do this? (You don't have to actually implement it.)
 
-Much like we did in Assignment-1, it would make sense to use a nested tuple: (datetime, (page, viewcount)) as output during the mapping 
-phase. By keeping this information from the start and maintaining during the combine and reduce stages (again, by outputting a nested 
+Much like we did in Assignment-1, it would make sense to use a nested tuple (datetime, (page, viewcount)) as output during the mapping 
+phase. By keeping this information from the start and maintaining it during the combine and reduce stages (again, by outputting a nested 
 tuple as the value), you would ultimately be able to output a result that also shows the page that is most popular along with the 
-viewcount for that hour.
+view count for that hour.
 
 2.	An RDD has many methods: it can do many more useful tricks than were at hand with MapReduce. Write a sentence or two to explain the 
 	difference between .map and .flatMap. Which is more like the MapReduce concept of mapping?
 
-The .map function takes each element x, applies f to it, and outputs a new record, or row, containing the output. In contrast, 
-the .flatMap function takes each element x, applies f to it, then flattens the resulting RDD from an m x n table into a 1 x n table. 
-I.e., the results are flattened into a single record. A simple example illustrates this well:
+The .map function is more like the MapReduce concept of mapping.The .map function takes each element x, applies f to it, and outputs a 
+new record, or row, containing the output. In contrast, the .flatMap function takes each element x, applies f to it, and then flattens the 
+resulting RDD from an m x n table into a 1 x n table. I.e., the results are flattened into a single record. A simple example 
+illustrates this well:
 
->>>> rdd = sc.parallelize([2, 3, 4])
->>>> result_rdd = rdd.flatMap(lambda x: [x,x])
->>>> result_list = result_rdd.collect()
->>>> print(result_list)
+rdd = sc.parallelize([2, 3, 4])
+
+result_rdd = rdd.flatMap(lambda x: [x,x])
+result_list = result_rdd.collect()
+print(result_list)
 [2, 2, 3, 3, 4, 4]				## flatMap has flatted the result into a single record
->>>> result2_rdd = rdd.map(lambda x: [x,x])
->>>> result2_list = result2_rdd.collect()
->>>> print(result2_list)
+ 
+result2_rdd = rdd.map(lambda x: [x,x])
+result2_list = result2_rdd.collect()
+print(result2_list)
 [[2, 2], [3, 3], [4, 4]]			## map creates a record for each input
 
+3.	Do the same for .reduce and .reduceByKey. Which is more like the MapReduce concept of reducing?
+
+.reduceByKey is much more like the MapReduce concept of reducing. 
+
+The function .reduce takes a function that takes two values and 
+returns a single value. This has the effect of reducing the elements of the RDD down to a single value. .reduce expects, 
+conceptually, a single array of elements. It walks through the elements of the array, combining the first two elements based on the 
+function provided, then uses the result as the first of the next two elements, culminating in a single-value as a result. An 
+example shows this clearly:
+
+matrix_rdd = sc.parallelize([[1, 2 ,3, 4]])
+global_sum = matrix_rdd.reduce(lambda a, b: a + b)                                                                            
+print("The global sum is:", global_sum)
+The global sum is: 10
+
+.reduceByKey on the other hand, expects an RDD of (key, value) pairs. It finds all keys the same and aggregates the values based on the 
+function provided. This is analogous to the idea of reduction we saw in MapReduce.
+
+rdd_pair = sc.parallelize([(1, 2), (3, 4), (3, 6), (4, 3)])
+result_rdd = rdd_pair.reduceByKey(lambda a, b: a + b)
+result = result_rdd.collect()
+print(result)                                                                           
+[(4, 3), (1, 2), (3, 10)]
+
+4.	When finding popular Wikipedia pages, the maximum number of page views is certainly unique, but the most popular page might be 
+	a tie. What would your improved Python implementation do if there were two pages with the same highest number of page views in 
+	an hour? What would be necessary to make your code find all of the pages views the maximum number of times? (Again, you don't 
+	have to actually implement this.)
+
+What is salient about this problem is the fact that .reduceByKey() returns a single, unique solution. One solution to this problem, 
+while still returning a unique solution, is to modify our records when creating the RDD of (key, value) pairs. Our unmodified solution 
+is (date_time, (views, page_name)). If we modify these records to take the form instead (date_time, (views, [page_name])) 
+where the names of the pages are moved into a list structure, we can then modify the function supplied to the reduceByKey operation. At 
+present, my function is written as follows:
+
+# r ~ requests, p ~ pagename
+def maximum(rp1, rp2):
+    r1, p1 = rp1
+    r2, p2 = rp2
+    if r1 > r2:
+        return rp1
+    else:
+        return rp2
+
+But we can now modify this as follows:
+
+# r ~ requests, p ~ pagename
+def maximum(rp1, rp2):
+    r1, p1 = rp1
+    r2, p2 = rp2
+    if r1 > r2:   
+        return rp1
+    elif r2 > r1:
+        return rp2
+    else:
+	return (r1, p1 + p2)
+
+This will have the effect of still producing a single line of output but since the function supplied to the reduceByKey operation now 
+has the condition of returning (r1, p1 + p2), the final line of output for each key will show each page that matches the maximum number 
+of views for that hour.

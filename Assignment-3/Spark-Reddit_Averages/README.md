@@ -9,7 +9,7 @@ reddit_averages.py takes a directory of reddit comments in .json format, then co
 5) Convert each tuple back to json format by mapping over each line using json.dumps
 
 ## To Submit Locally:
-spark-submit reddit_averages2.py output-*
+spark-submit reddit_averages.py output-*
 
 ## To read Output From All Files:
 cat output-1/part* | less

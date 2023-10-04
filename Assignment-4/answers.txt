@@ -1,0 +1,47 @@
+1. How much of a difference did the .cache() make in your Reddit ETL code?
+
+times without: 
+1) 17.35s user 1.54s system 176% cpu 10.678 total
+2) 18.03s user 1.65s system 176% cpu 11.159 total
+3) 16.50s user 1.51s system 182% cpu 9.861 total
+4) 17.83s user 1.77s system 178% cpu 10.983 total
+
+average total without cache: 10.670250000000001
+
+time with:
+1) 16.42s user 1.54s system 185% cpu 9.699 total
+2) 17.11s user 1.55s system 184% cpu 10.121 total
+3) 16.45s user 1.67s system 164% cpu 11.034 total
+4) 17.59s user 1.62s system 180% cpu 10.641 total
+
+average total with cache: 10.37375
+
+If we assume 4.5 second overhead for starting spark, we can recompute the actual run time as follows,
+
+average total without cache: 6.170250000000001
+average total with cache: 5.873749999999999
+
+Speedup: 1 - 5.873749999999999 / 6.170250000000001 = 0.048053158299907084
+
+So we see a roughly 4.8% speedup, which actually seems rather small considering it is not rematerializing the RDD, but perhaps there 
+are some built-in optimizations happening that we don't see that save us even if we forget to use .cache()
+
+2. When would .cache() make code slower than without?
+
+Since materializing an RDD is memory intensive, if we use .cache() and then immediately need to materialize another RDD in memory, 
+while the first RDD persists, we risk running out of RAM and causing spillage to disk. Since disk is so slow, this could cause a major 
+slowdown. In this example, it may actually make sense to materialize the first RDD, release it, materialize the second RDD, 
+release it, and then materialize the original RDD once more, as opposed to persisting the first RDD in memory.
+
+In a more general sense, if the use of .cache() unnecessarily causes disk spillage, it would be better not to use it.
+
+3. Under what conditions will the broadcast join be faster than an actual join?
+
+It will generally make sense to use a broadcast join when one of the DataFrames (or RDDS) is partitioned across multiple nodes (thus 
+causing a shuffle operation on a regular join), and if the other DataFrame or RDD is small enough to fit in the memory of each 
+executor, or worker node.
+
+4. When will the broadcast join be slower?
+
+In contrast, if the "small" dataframe is not actually all that small, and sending it out to each of the executors causes localized 
+memory pressures on the individual executors, a broadcast join may cause spillage to disk (or possible job failure, presumably).

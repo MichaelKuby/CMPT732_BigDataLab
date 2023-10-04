@@ -12,41 +12,80 @@ Found 8 items
 -rw-r--r--   2 ggbaker supergroup   19394837 2020-12-16 09:30 /courses/732/wordcount-5/o.txt.gz
 -rw-r--r--   2 ggbaker supergroup   79300825 2020-12-16 10:00 /courses/732/wordcount-5/s.txt.gz
 
-If we look at the fourth column of integers, which denotes the size of the inputs, we can see that the size of the files vary significantly. So when the original partitions are created, by default we will get unequally distributed partitions based on the original file 
-structure. While the program runs, when a node completes a task on one of the smaller partitions, it then sits idle, while an executor node working on a larger partition continues to work away.
+If we look at the fourth column of integers, which denotes the size of the inputs, we can see that the size of the files vary 
+significantly. So when the original partitions are created, by default we will get unequally distributed partitions based on the 
+original file structure. While the program runs, when a node completes a task on one of the smaller partitions, it then sits idle, 
+while an executor node working on a larger partition continues to work away.
 
-By changing the number of partitions to some number a fair bit larger than 8 (I used 8 * 10 = 80) we get 80, presumably equally distributed partitions to be worked on. Now, when one executor node completes a task on one of the partitions, there will be other partitions queued 
-up to be worked on. If any executor nodes are ever sitting idle, it should be near the very end of the job while other executor nodes are working on the very last (and now much smaller) partitions.
+By changing the number of partitions to some number a fair bit larger than 8 (I used 8 * 10 = 80) we get 80 presumably equally 
+distributed partitions to be worked on. Now, when one executor node completes a task on one of the partitions, there will be other 
+partitions queued up to be worked on. If any executor nodes are ever sitting idle, it should be near the very end of the job while 
+other executor nodes are working on the very last (and now much smaller) partitions.
 
-2. The same fix does not make this code run faster on the wordcount-3 data set. (It may be slightly slower?) Why? [For once, the answer is not “the data set is too small”.]
+2. The same fix does not make this code run faster on the wordcount-3 data set. (It may be slightly slower?) Why? [For once, the answer 
+is not “the data set is too small”.]
 
-The big difference between wordcount-5 and wordcount-3 is in that the there are 101 files in the wordcount-3 directory and, notably, all but one of those files are within one order of magnitude in size. In other words, they are already relatively well partitioned for 
-computation. To answer the question for why it might actually be slower, we note that .repartition() is a shuffle operation, requiring an all-to-all migration of information over the network. The overhead required to serialize the data and shuffle it over the network into new 
-partitions is a large cost considering the original partitioning schema is already sufficient.
+The big difference between wordcount-5 and wordcount-3 is that there are 101 files in the wordcount-3 directory and, notably, 
+all but one of those files are within one order of magnitude in size. In other words, they are already relatively well partitioned for 
+computation. To understand why it might actually be slower, we note that .repartition() is a shuffle operation, requiring 
+an all-to-all migration of information over the network. The overhead required to serialize the data and shuffle it over the network 
+into new partitions is a large cost considering the original partitioning schema is already sufficient.
 
-3. How could you modify the wordcount-5 input so that the word count code can process it and get the same results as fast as possible? (It's possible to get about another minute off the running time.)
+3. How could you modify the wordcount-5 input so that the word count code can process it and get the same results as fast as possible? 
+(It's possible to get about another minute off the running time.)
 
-We might think about modifying the inputs themselves by doing some manual file splitting and repartitioning of the files (using say zsh 
-or bash) before loading them in to Spark. This would have the effect of removing the repartitioning step every time the code is run, 
+We might think about modifying the inputs themselves by doing some manual file splitting and repartitioning of the files (using zsh or 
+bash) before loading them in to Spark. This would have the effect of removing the repartitioning step every time the code is run, 
 removing a significant amount of run-time overhead.
 
-4. When experimenting with the number of partitions while estimating Euler's constant, you likely didn't see much difference for a range of values, and chose the final value in your code somewhere in that range. What range of partitions numbers was “good” (on the 
+4. When experimenting with the number of partitions while estimating Euler's constant, you likely didn't see much difference for a 
+range of values, and chose the final value in your code somewhere in that range. What range of partitions numbers was “good” (on the 
 desktop/laptop where you were testing)?
 
-Note first that my computer has 4 cores. The takeaway was that, using .numPartitions(n), if n >= the number of cores available, there was basically no difference in the run time, until n became very large. Why? If n < the number of cores, we were failing to make use of all the 
-cores available, thus the degree of parallelism was suboptimal. Once n >= the number of cores, we were making ideal use of the cores available to us, and since Spark evenly distributes the data among the partitions, any number above 4 and below an extremely high number of 
-partitions gave us reasonable speed. Numbers too high accrued speed loss due to overhead. It also seems reasonable to choose n such that n evenly divides the number of cores; by doing so we hope that even the final partitions are making full use of the available cores.
+Here are a few samples of output times based on various partition sizes that explain the reasoning that follows: 
 
-Here are a few samples of output from my times:
+1 Partition: ${SPARK_HOME}/bin/spark-submit euler.py 1000000000  9.19s user 0.66s system 8% cpu 1:50.63 total 
+2 Partitions: ${SPARK_HOME}/bin/spark-submit euler.py 1000000000  8.60s user 0.61s system 15% cpu 58.314 total
+4 Partitions: ${SPARK_HOME}/bin/spark-submit euler.py 1000000000  9.12s user 0.62s system 28% cpu 34.381 total  
+8 Partitions: ${SPARK_HOME}/bin/spark-submit euler.py 1000000000  9.98s user 0.71s system 30% cpu 35.595 total   
+40 Partitions: ${SPARK_HOME}/bin/spark-submit euler.py 1000000000  11.18s user 0.72s system 31% cpu 38.243 total   
+400 Partitions: ${SPARK_HOME}/bin/spark-submit euler.py 1000000000  15.35s user 1.13s system 42% cpu 38.962 total  
+4000 Partitions: ${SPARK_HOME}/bin/spark-submit euler.py 1000000000  30.69s user 3.72s system 55% cpu 1:01.93 total
 
-1 partition: 	spark-submit euler.py 5000000  9.33s user 0.84s system 9% cpu 1:49.83 total 
-2 partitions: 	spark-submit euler.py 5000000  9.07s user 0.82s system 16% cpu 59.776 total
-4 partitions:	spark-submit euler.py 5000000  10.90s user 0.98s system 28% cpu 42.000 total
-16 partitions:	spark-submit euler.py 5000000  9.81s user 1.13s system 26% cpu 41.543 total
-60 partitions:	spark-submit euler.py 5000000  12.35s user 0.99s system 32% cpu 40.485 total
-120 partitions: spark-submit euler.py 5000000  14.05s user 1.08s system 37% cpu 40.449 total
-240 partitions: spark-submit euler.py 5000000  14.71s user 1.17s system 35% cpu 44.245 total
+Note first that my computer has 4 phyiscal cores. The takeaway was that, using .numPartitions(n), if n >= the number of cores 
+available, there near optimal performance in the run time, until n became very large. Why? If n < the number of cores, we were failing 
+to make use of all the cores available, thus the degree of parallelism was suboptimal. Once n >= the number of cores, we were making 
+ideal use of the cores available to us, and since Spark evenly distributes the data among the partitions, any number above 4 and below 
+an extremely high number of partitions gave us reasonable speed. Numbers too high accrued speed loss due to overhead. It also seems 
+reasonable to choose n such that n evenly divides the number of cores; by doing so we hope that even during calculation of the final 
+partitions, we are making full use of the available cores.
 
-Note that once we were using 4 cores, most times seemed reasonable. At greater than 240 we suspect overhead slowdown.
+In general the finding was that if the number of partitions was equal to or greater than the number of cores, and within 2 orders of 
+magnitude of the number of cores, the speed achieved was excellent.
 
 5. How much overhead does it seem like Spark adds to a job? How much speedup did PyPy get over the usual Python implementation?
+
+It seems to me that to answer the question "how much overhead does it seem like Spark adds to a job," we can look to the Non-Spark 
+Single-Threaded PyPy time implementation and compare it to the Spark Python with PyPy implementation:
+
+Spark Python with PyPy time: 34.381 total
+Non-Spark Single-Threaded PyPy time: 44.823 total
+Speed up: 23%
+
+Now, if Spark required zero overhead, and could simply compute in parallel immediately, we should expect the run time to be 44.823 (the 
+time of Non-spark Single-Threaded PyPy) divided by n, the number of cores. On my computer that would be 44.823 / 4 = 11.21 seconds. The 
+actual time to run the job was 34.381 seconds. Given that 34.381 - 11.21 = 23.12, there's somewhere around 23 seconds here that are 
+unnacounted for. This suggests that there's probably around ~20 seconds of overhead accrued by starting up the JVM, partitioning the 
+work to be done across the nodes, then shuffling and reducing. Interestingly, despite the relatively high overhead cost, we STILL see a 
+23% speed up through parallelism enabled by Spark.
+
+Now, to answer the question "How much speedup did PyPy get over the usual Python implementation?" is much more straightforward. Let us 
+compare:
+
+Standard CPython Implementation: 42.295 total
+Spark Python with PyPy: 40.496 total
+
+40.496 / 42.295 = 0.9575
+1-0.9575 = 0.0425
+
+Hence, PyPy accrued around a 4.25% speed-up in time.

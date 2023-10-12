@@ -1,0 +1,29 @@
+Part 1 of recording the details
+
+Original:
+
+Input Size / Records: 2.6 MiB / 3245
+Output Size / Records: 27.2 KiB / 3245
+
+With S3 Filtering:
+
+Input Size / Records: 97.7 KiB / 3245
+Output Size / Records: 27.2 KiB / 3245
+
+
+Part 2 of recording the details: Bring up the Spark History at localhost:18080 (you will need to have an active SSH connection and have 
+met Prerequisite 2 above). Locate your application on the list and click on its App ID link. From the Spark Jobs page, note the Total 
+Uptime (top left) and record the durations of each job listed in the table
+
+Using 4 instances with 1 core on the SFU cluster:
+
+Total Uptime: 14 min
+
+Using 4 instances each with 4 cores on the AWS cluster:
+
+Total Uptime: 4.9 min
+
+collect at /mnt/tmp/spark-35d0e863-c4d0-4a46-b623-d5af29daef46/relative_score_bcast.py:62	Duration 1.9 min
+sortBy at /mnt/tmp/spark-35d0e863-c4d0-4a46-b623-d5af29daef46/relative_score_bcast.py:68 	Duration 22 s
+sortBy at /mnt/tmp/spark-35d0e863-c4d0-4a46-b623-d5af29daef46/relative_score_bcast.py:68	Duration 23 s
+runJob at SparkHadoopWriter.scala:83								Duration 1.4 min

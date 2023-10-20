@@ -37,7 +37,6 @@ def main(inputs, output):
     weather_joined = weather_range.join(weather_max_range, 'date')
     weather_joined = weather_joined.where(weather_joined['range'] == weather_joined['max(range)']).select('date', 'station', 'range')
     weather_results = weather_joined.sort(['date', 'station'])
-    weather_results.show()
     weather_results.write.csv(output, mode='overwrite')
 
 

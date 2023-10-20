@@ -1,0 +1,85 @@
+Execution Plans
+
+Some things to note from the output: when the JSON input is read, you can see which fields are loaded into memory; the average is 
+calculated in three steps.
+
+== Physical Plan ==
+AdaptiveSparkPlan isFinalPlan=false
++- HashAggregate(keys=[subreddit#18], functions=[avg(score#16L)])
+   +- Exchange hashpartitioning(subreddit#18, 200), ENSURE_REQUIREMENTS, [plan_id=11]
+      +- HashAggregate(keys=[subreddit#18], functions=[partial_avg(score#16L)])
+         +- FileScan json [score#16L,subreddit#18] Batched: false, DataFilters: [], Format: JSON, Location: InMemoryFileIndex(1 
+paths)[file:/Users/michaelkuby/Documents/GitHub/CMPT732_BigDataLab/Assignment..., PartitionFilters: [], PushedFilters: [], ReadSchema: 
+struct<score:bigint,subreddit:string>
+
+1. In the Reddit averages execution plan, which fields were loaded? How was the average computed (and was a combiner-like step done)?
+
+The only fields that were loaded were the columns 'subreddit' and 'score'. We can see that a combiner step was done after loading in the relative fields 
+based on this line: +- HashAggregate(keys=[subreddit#18], functions=[partial_avg(score#16L)]). This is essentially an combining 'reduceByKey' step. The 
+results of this are then shuffled across the network based on the subreddits, which we can see here: +- Exchange hashpartitioning(subreddit#18, 200), 
+ENSURE_REQUIREMENTS, [plan_id=11]. Finally, the result is computed with a final aggregation computation, again based on a reduceByKey type operation 
+with the key being the subreddit, and the score as the value, as can be seen here: +- HashAggregate(keys=[subreddit#18], functions=[avg(score#16L)]).
+
+2. What was the running time for your Reddit averages implementations in the five scenarios described above? How much difference did Python 
+implementation make (PyPy vs the default CPython)? Why was it large for RDDs but not for DataFrames?
+
+See below for the running times for Reddit averages fort he five scenarios described.
+
+How much difference did PyPy make vs the default CPython? 
+
+For Dataframes, I saw a significant slow-down when using PyPy. 110s/89s = 1.234, or about a quarter more time. In general I wouldn't expect to see this, 
+however, since the only real difference here should be the impact on computation done using python functions, and in this case we are not doing any 
+computation using python, since Dataframes computation is done in Scala. I suspect future runs would show that the time is relatively similar for each.
+
+For RDDs, I saw a significant speedup when using PyPy. 73s/150s = 0.487 or less than half of the time. Why is this happening? It seems that PyPy, a just 
+in time compiler, is surprisingly good at what it does. And since RDD's do their computation using python code, we accrue all of this benefit when using 
+PyPy.
+
+MapReduce:
+real	3m13.454s
+user	0m14.488s
+sys	0m1.474s
+
+Why so slow? Seems to like to write to disk during intermediary steps.
+
+Dataframes with CPython:
+real	1m29.349s
+user	0m31.312s
+sys	0m2.573s
+
+Why so fast? Only needs to bring in two columns of data. No python work being done.
+
+RDD with CPython:
+real	2m30.199s
+user	0m28.872s
+sys	0m2.381s
+
+Why so slow? Needs to bring in all the data in row-oriented form. Computation done using python functions.
+
+Dataframes with PyPy:
+real	1m50.748s
+user	0m45.688s
+sys	0m5.493s
+
+Should be the same in time to with CPython. Why? Because no python code 
+is really being run here to do any computation.
+
+RDD with PyPy:
+real	1m13.355s
+user	0m22.826s
+sys	0m2.378s
+
+Why so fast? The optimization done by PyPy seems to be very effective, 
+and since the RDD uses python functions to do the computation, it's 
+getting the benefit.
+
+3. How much of a difference did the broadcast hint make to the Wikipedia popular code's running time (and on what data set)?
+
+Dataset: pagecounts-3
+
+With broadcast join hint: 
+
+real	2m24.076s
+user	0m54.260s
+sys	0m4.254s
+

@@ -45,7 +45,7 @@ def tab_separated(kv):
     return "%s\t%s" % (kv[0], kv[1])
 
 
-# Read the input files in as lines
+# Read text input files as an RDD
 text = sc.textFile(inputs)
 
 # Break each line up into tuples

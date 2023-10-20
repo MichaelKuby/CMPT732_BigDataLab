@@ -47,7 +47,7 @@ public class WordCountImproved extends Configured implements Tool {
     @Override
     public int run(String[] args) throws Exception {
         Configuration conf = this.getConf();
-        Job job = Job.getInstance(conf, "word count");
+        Job job = Job.getInstance(conf, "word count improved");
         job.setJarByClass(WordCountImproved.class);
 
         job.setInputFormatClass(TextInputFormat.class);

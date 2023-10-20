@@ -17,6 +17,8 @@ import org.apache.hadoop.util.ToolRunner;
 
 public class WordCount extends Configured implements Tool {
 
+    // This class performs a mapping operation on the original inputs
+
     public static class TokenizerMapper
             extends Mapper<LongWritable, Text, Text, IntWritable>{
 
@@ -33,6 +35,10 @@ public class WordCount extends Configured implements Tool {
             }
         }
     }
+
+    // We have not written a specific combine operation.
+
+    // This class performs a reduceByKey operation.
 
     public static class IntSumReducer
             extends Reducer<Text, IntWritable, Text, IntWritable> {

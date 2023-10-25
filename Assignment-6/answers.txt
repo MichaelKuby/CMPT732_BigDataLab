@@ -1,17 +1,3 @@
-Execution Plans
-
-Some things to note from the output: when the JSON input is read, you can see which fields are loaded into memory; the average is 
-calculated in three steps.
-
-== Physical Plan ==
-AdaptiveSparkPlan isFinalPlan=false
-+- HashAggregate(keys=[subreddit#18], functions=[avg(score#16L)])
-   +- Exchange hashpartitioning(subreddit#18, 200), ENSURE_REQUIREMENTS, [plan_id=11]
-      +- HashAggregate(keys=[subreddit#18], functions=[partial_avg(score#16L)])
-         +- FileScan json [score#16L,subreddit#18] Batched: false, DataFilters: [], Format: JSON, Location: InMemoryFileIndex(1 
-paths)[file:/Users/michaelkuby/Documents/GitHub/CMPT732_BigDataLab/Assignment..., PartitionFilters: [], PushedFilters: [], ReadSchema: 
-struct<score:bigint,subreddit:string>
-
 1. In the Reddit averages execution plan, which fields were loaded? How was the average computed (and was a combiner-like step done)?
 
 The only fields that were loaded were the columns 'subreddit' and 'score'. We can see that a combiner step was done after loading in the relative fields 
@@ -19,6 +5,20 @@ based on this line: +- HashAggregate(keys=[subreddit#18], functions=[partial_avg
 results of this are then shuffled across the network based on the subreddits, which we can see here: +- Exchange hashpartitioning(subreddit#18, 200), 
 ENSURE_REQUIREMENTS, [plan_id=11]. Finally, the result is computed with a final aggregation computation, again based on a reduceByKey type operation 
 with the key being the subreddit, and the score as the value, as can be seen here: +- HashAggregate(keys=[subreddit#18], functions=[avg(score#16L)]).
+
+Execution Plan:
+
+Some things to note from the output: when the JSON input is read, you can see which fields are loaded into memory; the average is
+calculated in three steps.
+
+== Physical Plan ==
+AdaptiveSparkPlan isFinalPlan=false
++- HashAggregate(keys=[subreddit#18], functions=[avg(score#16L)])
+   +- Exchange hashpartitioning(subreddit#18, 200), ENSURE_REQUIREMENTS, [plan_id=11]
+      +- HashAggregate(keys=[subreddit#18], functions=[partial_avg(score#16L)])
+         +- FileScan json [score#16L,subreddit#18] Batched: false, DataFilters: [], Format: JSON, Location: InMemoryFileIndex(1
+paths)[file:/Users/michaelkuby/Documents/GitHub/CMPT732_BigDataLab/Assignment..., PartitionFilters: [], PushedFilters: [], ReadSchema:
+struct<score:bigint,subreddit:string>
 
 2. What was the running time for your Reddit averages implementations in the five scenarios described above? How much difference did Python 
 implementation make (PyPy vs the default CPython)? Why was it large for RDDs but not for DataFrames?
@@ -75,11 +75,121 @@ getting the benefit.
 
 3. How much of a difference did the broadcast hint make to the Wikipedia popular code's running time (and on what data set)?
 
+With hint:
+
+real    2m12.900s
+user    0m59.077s
+sys     0m4.815s
+
+Without hint:
+
+real    2m24.685s
+user    0m55.060s
+sys     0m5.785s
+
 Dataset: pagecounts-3
+
+The difference in running time on pagecounts-3 is given by running time with hint / running time without hint = 133s/144s = 0.924 or about 92%. So we 
+see about an 8% speed-up in this case. For bigger datasets and longer runtimes we might extrapolate these findings and recognize that an 8% speedup 
+would be considerable time and resource savings.
+
+4. How did the Wikipedia popular execution plan differ with and without the broadcast hint?
+
+The obvious difference is that we see two different joins: without the hint, we get a sortmergejoin, which is efficient when joining two large tables; 
+with the hint, we get a broadcasthashjoin, which avoids the need to shuffle the larger dataframe over the network.
+
+We can also identify a reduction in the amount of shuffling over the network by looking at the specific lines +- Exchange hashpartitioning and +- 
+Exchange rangepartitioning. Without the hint, we see the former line twice and the latter line once, for a total of three network partitioning 
+operations. With the hint, we see each line once, suggesting a reduction in the amount of shuffling and network traffic.
+
+Finally, without use of the broadcast hint we are performing three sorts: once on each dataframe before the join, and one final sort. With the 
+broadcast hint we reduce this to a single sort which is performed as the very last operation. Since sorting is computationally expensive, we should 
+expect to see increased performance by reducing their frequency.
 
 With broadcast join hint: 
 
-real	2m24.076s
-user	0m54.260s
-sys	0m4.254s
+== Physical Plan ==
+AdaptiveSparkPlan isFinalPlan=false
++- Sort [hour#16 ASC NULLS FIRST], true, 0
+   +- Exchange rangepartitioning(hour#16 ASC NULLS FIRST, 200), ENSURE_REQUIREMENTS, [plan_id=68]
+      +- Project [hour#16, title#1, views#2L]
+         +- BroadcastHashJoin [views#2L, hour#16], [max_views#53L, hour#60], Inner, BuildRight, false
+            :- Filter (isnotnull(views#2L) AND isnotnull(hour#16))
+            :  +- InMemoryTableScan [title#1, views#2L, hour#16], [isnotnull(views#2L), isnotnull(hour#16)]
+            :        +- InMemoryRelation [language#0, title#1, views#2L, hour#16], StorageLevel(disk, memory, deserialized, 1 replicas)
+            :              +- *(2) Project [language#0, title#1, views#2L, pythonUDF0#27 AS hour#16]
+            :                 +- BatchEvalPython [path_to_hour(filename#8)#15], [pythonUDF0#27]
+            :                    +- *(1) Filter ((isnotnull(language#0) AND isnotnull(title#1)) AND ((language#0 = en) AND (NOT StartsWith(title#1, 
+Special:) AND NOT (title#1 = Main_page))))
+            :                       +- *(1) Project [language#0, title#1, views#2L, input_file_name() AS filename#8]
+            :                          +- FileScan csv [language#0,title#1,views#2L] Batched: false, DataFilters: [], Format: CSV, Location: 
+InMemoryFileIndex(1 paths)[hdfs://controller.local:54310/courses/732/pagecounts-3], PartitionFilters: [], PushedFilters: [], ReadSchema: 
+struct<language:string,title:string,views:bigint>
+            +- BroadcastExchange HashedRelationBroadcastMode(List(input[1, bigint, false], input[0, string, true]),false), [plan_id=64]
+               +- Filter isnotnull(max_views#53L)
+                  +- HashAggregate(keys=[hour#60], functions=[max(views#58L)])
+                     +- Exchange hashpartitioning(hour#60, 200), ENSURE_REQUIREMENTS, [plan_id=60]
+                        +- HashAggregate(keys=[hour#60], functions=[partial_max(views#58L)])
+                           +- Filter isnotnull(hour#60)
+                              +- InMemoryTableScan [views#58L, hour#60], [isnotnull(hour#60)]
+                                    +- InMemoryRelation [language#56, title#57, views#58L, hour#60], StorageLevel(disk, memory, deserialized, 1 
+replicas)
+                                          +- *(2) Project [language#0, title#1, views#2L, pythonUDF0#27 AS hour#16]
+                                             +- BatchEvalPython [path_to_hour(filename#8)#15], [pythonUDF0#27]
+                                                +- *(1) Filter ((isnotnull(language#0) AND isnotnull(title#1)) AND ((language#0 = en) AND (NOT 
+StartsWith(title#1, Special:) AND NOT (title#1 = Main_page))))
+                                                   +- *(1) Project [language#0, title#1, views#2L, input_file_name() AS filename#8]
+                                                      +- FileScan csv [language#0,title#1,views#2L] Batched: false, DataFilters: [], Format: CSV, 
+Location: InMemoryFileIndex(1 paths)[hdfs://controller.local:54310/courses/732/pagecounts-3], PartitionFilters: [], PushedFilters: [], ReadSchema: 
+struct<language:string,title:string,views:bigint>
 
+Without broadcast join hint:
+
+== Physical Plan ==
+AdaptiveSparkPlan isFinalPlan=false
++- Sort [hour#16 ASC NULLS FIRST], true, 0
+   +- Exchange rangepartitioning(hour#16 ASC NULLS FIRST, 200), ENSURE_REQUIREMENTS, [plan_id=72]
+      +- Project [hour#16, title#1, views#2L]
+         +- SortMergeJoin [views#2L, hour#16], [max_views#53L, hour#60], Inner
+            :- Sort [views#2L ASC NULLS FIRST, hour#16 ASC NULLS FIRST], false, 0
+            :  +- Exchange hashpartitioning(views#2L, hour#16, 200), ENSURE_REQUIREMENTS, [plan_id=65]
+            :     +- Filter (isnotnull(views#2L) AND isnotnull(hour#16))
+            :        +- InMemoryTableScan [title#1, views#2L, hour#16], [isnotnull(views#2L), isnotnull(hour#16)]
+            :              +- InMemoryRelation [language#0, title#1, views#2L, hour#16], StorageLevel(disk, memory, deserialized, 1 replicas)
+            :                    +- *(2) Project [language#0, title#1, views#2L, pythonUDF0#27 AS hour#16]
+            :                       +- BatchEvalPython [path_to_hour(filename#8)#15], [pythonUDF0#27]
+            :                          +- *(1) Filter ((isnotnull(language#0) AND isnotnull(title#1)) AND ((language#0 = en) AND (NOT 
+StartsWith(title#1, Special:) AND NOT (title#1 = Main_page))))
+            :                             +- *(1) Project [language#0, title#1, views#2L, input_file_name() AS filename#8]
+            :                                +- FileScan csv [language#0,title#1,views#2L] Batched: false, DataFilters: [], Format: CSV, Location: 
+InMemoryFileIndex(1 paths)[hdfs://controller.local:54310/courses/732/pagecounts-3], PartitionFilters: [], PushedFilters: [], ReadSchema: 
+struct<language:string,title:string,views:bigint>
+            +- Sort [max_views#53L ASC NULLS FIRST, hour#60 ASC NULLS FIRST], false, 0
+               +- Exchange hashpartitioning(max_views#53L, hour#60, 200), ENSURE_REQUIREMENTS, [plan_id=66]
+                  +- Filter isnotnull(max_views#53L)
+                     +- HashAggregate(keys=[hour#60], functions=[max(views#58L)])
+                        +- Exchange hashpartitioning(hour#60, 200), ENSURE_REQUIREMENTS, [plan_id=60]
+                           +- HashAggregate(keys=[hour#60], functions=[partial_max(views#58L)])
+                              +- Filter isnotnull(hour#60)
+                                 +- InMemoryTableScan [views#58L, hour#60], [isnotnull(hour#60)]
+                                       +- InMemoryRelation [language#56, title#57, views#58L, hour#60], StorageLevel(disk, memory, deserialized, 1 
+replicas)
+                                             +- *(2) Project [language#0, title#1, views#2L, pythonUDF0#27 AS hour#16]
+                                                +- BatchEvalPython [path_to_hour(filename#8)#15], [pythonUDF0#27]
+                                                   +- *(1) Filter ((isnotnull(language#0) AND isnotnull(title#1)) AND ((language#0 = en) AND (NOT 
+StartsWith(title#1, Special:) AND NOT (title#1 = Main_page))))
+                                                      +- *(1) Project [language#0, title#1, views#2L, input_file_name() AS filename#8]
+                                                         +- FileScan csv [language#0,title#1,views#2L] Batched: false, DataFilters: [], Format: CSV, 
+Location: InMemoryFileIndex(1 paths)[hdfs://controller.local:54310/courses/732/pagecounts-3], PartitionFilters: [], PushedFilters: [], ReadSchema: 
+struct<language:string,title:string,views:bigint>
+
+
+5. For the weather data question, did you prefer writing the “DataFrames + Python methods” style, or the “temp tables + SQL syntax” style form solving 
+the problem? Which do you think produces more readable code?
+
+I preferred writing the DataFrames + Python methods style since it was more familiar to me; however, when I look back and read the code, I frequently 
+find the SQL style to be more readable. There are some exceptions to this, mind you, such as when doing Group By operations in SQL. I think having 
+SELECT and the aggregation function stated prior to the GROUP BY clause is a bit unnatural, because it's not the logical order in which you think about 
+the problem. So, I guess my answer is that it depends. Basic operations seem to be easier to read in SQL syntax, while more complicated operations seem 
+to be easier to read (and write) in the python method style. I suspect that I will generally stick with the DataFrames + Python method style since I 
+am most familiar with it, and I don't see a good reason to learn and memorize two different syntaxes to tackle the same problem.

@@ -37,16 +37,15 @@ def longest_paths(record, current_longest_path):
 
 def main(inputs, output, source, destination):
     graph = sc.textFile(inputs + "/links-simple-sorted.txt")
-    # print(graph.take(5)) # ['1: 3 5', '2: 4', '3: 2 5', '4: 3', '5:']
 
     graph = graph.map(parse_input)
     graph.cache()
-    # print(graph.take(10)) # [(1, [3, 5]), (2, [4]), (3, [2, 5]), (4, [3]), (5, []), (6, [1, 5])]
+
+    found = False   # To identify whether a path was found or not
 
     # Create an RDD depicting our starting point
     starting_point = [(source, (None, 0))]
     shortest_paths = sc.parallelize(starting_point)
-    # print(shortest_paths.take(5)) # [1, (None, 0)]
     fringe = shortest_paths
 
     for i in range(6):
@@ -74,23 +73,26 @@ def main(inputs, output, source, destination):
         # Save output
         shortest_paths.saveAsTextFile(output + '/iter-' + str(i))
         if shortest_paths.filter(lambda kv: kv[0] == destination).count() > 0:
+            found = True
             break
 
 
     current = destination
     path = []
-    while True:
-        path.append(current)
-        # There will be only one record at this point, so collect is appropriate.
-        list_kv = shortest_paths.filter(lambda kv: kv[0] == current).collect()
-        s, d = list_kv[0][1]
-        current = s
-        if current is None:
-            break
+    if found:
+        while True:
+            path.append(current)
+            # There will be only one record at this point, so collect is appropriate.
+            list_kv = shortest_paths.filter(lambda kv: kv[0] == current).collect()
+            s, d = list_kv[0][1]
+            current = s
+            if current is None:
+                break
 
     path.reverse()
     final_path = sc.parallelize(path)
     final_path.saveAsTextFile(output + '/path')
+
 
 if __name__ == '__main__':
     # Spark RDD Set-up

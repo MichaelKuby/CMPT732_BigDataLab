@@ -29,6 +29,12 @@ def find_shortest_path(v1, v2):
         return v2
 
 
+def longest_paths(record, current_longest_path):
+    k, v = record
+    path_list, (source, distance) = v
+    return distance == current_longest_path
+
+
 def main(inputs, output, source, destination):
     graph = sc.textFile(inputs + "/links-simple-sorted.txt")
     # print(graph.take(5)) # ['1: 3 5', '2: 4', '3: 2 5', '4: 3', '5:']
@@ -46,17 +52,18 @@ def main(inputs, output, source, destination):
     for i in range(6):
 
         # Join nodes on the fringe to the graph to identify new shortest paths.
+        print("fringe before join: ", fringe.take(5)) # format (node, (edgeList), (source, distance))
         fringe = graph.join(fringe)
+        print("fringe after join with graphs: ", fringe.take(5))  # format (node, (edgeList), (source, distance))
         fringe.cache()
+
 
         # Find the new shortest paths to fringe nodes
         new_shortest_paths = fringe.flatMap(new_nodes)
+        print("new paths from fringe: ", new_shortest_paths.take(5))
+
         # Update the fringe
-        print("old fringe: ", fringe.take(5))  #format (node, (edgeList), (source, distance))
-        print("new shortest paths: ", new_shortest_paths.take(5))
-        # subtractByKey is a shuffle --> Expensive. Maybe not a good approach?
-        fringe = new_shortest_paths     #   .subtractByKey(fringe)
-        print("new fringe: ", fringe.take(5), "\n")  # format (node, (edgeList), (source, distance))
+        fringe = new_shortest_paths
 
         # Update our list of shortest paths
         all_shortest_paths = shortest_paths.union(new_shortest_paths)
@@ -65,10 +72,25 @@ def main(inputs, output, source, destination):
         shortest_paths.cache()
 
         # Save output
-        # shortest_paths.saveAsTextFile(output + '/iter-' + str(i))
+        shortest_paths.saveAsTextFile(output + '/iter-' + str(i))
         if shortest_paths.filter(lambda kv: kv[0] == destination).count() > 0:
             break
 
+
+    current = destination
+    path = []
+    while True:
+        path.append(current)
+        # There will be only one record at this point, so collect is appropriate.
+        list_kv = shortest_paths.filter(lambda kv: kv[0] == current).collect()
+        s, d = list_kv[0][1]
+        current = s
+        if current is None:
+            break
+
+    path.reverse()
+    final_path = sc.parallelize(path)
+    final_path.saveAsTextFile(output + '/path')
 
 if __name__ == '__main__':
     # Spark RDD Set-up

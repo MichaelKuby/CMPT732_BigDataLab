@@ -34,7 +34,7 @@ def main(inputs):
     groups = logs_df.groupBy(logs_df['host_name']).agg(F.count(logs_df['req_path']),
                                                        F.sum(logs_df['bytes_transferred']))
 
-    # Create a dataframe containing all of the columns needed for the computation
+    # Create a dataframe containing all the columns needed for the computation
     sums = groups.select(groups['host_name'], F.lit(1), groups['count(req_path)'], groups['count(req_path)'] ** 2,
                          groups['sum(bytes_transferred)'], groups['sum(bytes_transferred)'] ** 2,
                          groups['count(req_path)'] * groups['sum(bytes_transferred)'])

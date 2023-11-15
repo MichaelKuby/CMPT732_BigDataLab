@@ -1,0 +1,57 @@
+Questions I've had trouble with and could learn from:
+
+
+1. What is the range of the purchase dates?
+
+SELECT datediff(days, MIN(pdate), MAX(pdate)) FROM purchases
+
+
+2. How many customers are there from each province and territory?
+
+SELECT COUNT(province), province FROM customers
+GROUP BY province
+
+
+3. What are the average and median purchase amounts?
+
+SELECT AVG(amount), MEDIAN(amount) FROM purchases
+
+
+
+4. What's in greater_vancouver_prefixes?
+
+SELECT * FROM greater_vancouver_prefixes
+
+Aldergrove	V2Z	
+Burnaby	V5B	
+Coquitlam	V3E	
+Delta	V4K	
+Gold Creek	V0B	
+Lions Bay	V0N	
+
+5. QUESTION 1: DEBIT OR CREDIT?
+
+Do people from Ontario tend to put larger purchases on one payment method?
+
+Ontario -> table: customers PK: custid
+
+Amount -> table: purchases PK: purchid REFERENCES: customers(custid), paymentmethods(pmid), amenities(amenid)
+
+Method -> table: paymentmethods PK: pmid REFERENCES: customers(custid)
+
+QUERY:
+
+SELECT mtype, MEDIAN(amount)
+FROM customers
+JOIN purchases ON customers.custid = purchases.custid
+JOIN paymentmethods ON customers.custid = paymentmethods.custid AND purchases.pmid = paymentmethods.pmid
+WHERE customers.province='ON'
+GROUP BY paymentmethods.mtype
+
+RESULTS:
+
+debit	30.83	
+credit	37.24	
+
+Prose Answer: From the results we can see that the median amount spent on credit cards by customers from Ontario is higher (37.24) than what they spend 
+on debit (30.83).

@@ -1,0 +1,169 @@
+1. Do people from Ontario tend to put larger purchases on one payment method?
+
+a) Prose Answer: From the results we can see that the median amount spent on credit cards by customers from Ontario is higher (37.24) 
+than what they spend on debit (30.83).
+
+b) Query used to arrive at the answer:
+
+QUERY:
+
+SELECT mtype, MEDIAN(amount)
+FROM customers
+JOIN purchases ON customers.custid = purchases.custid
+JOIN paymentmethods ON customers.custid = paymentmethods.custid AND purchases.pmid = paymentmethods.pmid
+WHERE customers.province='ON'
+GROUP BY paymentmethods.mtype
+
+RESULTS:
+
+debit   30.83
+credit  37.24
+
+
+2. Consider the three groups of people: people who live in the Vancouver region, visitors from other BC areas, and visitors from 
+outside BC altogether. Which group spent the most per transaction?
+
+a. Answer to the original question in prose.
+
+From_BC_non_Van	 From_Van 	Count 	Average Median
+	false	true		10384	86.01	27.37	
+	true	false		3899	95.16	30.08	
+	false	false		15717	112.89	33.27	
+
+Both the average, at 112.89, and the median, at 33.27, reveal that the group that spent the most per transaction are visitors from 
+outside BC altogether.
+
+b. A SQL statement to create the required view
+
+DROP VIEW IF EXISTS vancouver_custs CASCADE;
+CREATE VIEW vancouver_custs AS
+WITH 
+    vprefixes (vp) AS 
+        (SELECT DISTINCT pcprefix FROM greater_vancouver_prefixes)
+SELECT
+    custid, 
+    CASE 
+        WHEN SUBSTRING(customers.postalcode, 1, 3) IN (SELECT vp FROM vprefixes) 
+        THEN 1 
+        ELSE 0 
+    END AS in_vancouver
+FROM customers;
+
+c. A SQL query to support your answer for component a
+
+SELECT 
+    (vancouver_custs.in_vancouver = 0 AND customers.province = 'BC') AS From_BC_non_Van,
+    (vancouver_custs.in_vancouver = 1) AS From_Van,
+    COUNT(customers.custid) AS cust_count,
+    AVG(purchases.amount),
+    MEDIAN(purchases.amount)
+FROM customers
+JOIN vancouver_custs ON vancouver_custs.custid = customers.custid
+JOIN purchases ON purchases.custid = customers.custid
+GROUP BY (vancouver_custs.in_vancouver = 0 AND customers.province = 'BC'), 
+         (vancouver_custs.in_vancouver = 1)
+ORDER BY MEDIAN(purchases.amount) asc;
+
+
+3. Who spends more at restaurants that serve sushi: locals (residents of Greater Vancouver) or tourists?
+
+a. An answer to the original question in prose:
+
+At restaurants that serve sushi, tourists spend more than locals based on comparison of both the mean and median statistics.
+
+Results:
+
+avg	median	in_vancouver
+85.8	88.07	0	
+77.57	78.8	1	
+
+b. A SQL query to support your answer for component a
+
+WITH sushi (amenid) AS
+    (SELECT amenities.amenid 
+    FROM amenities
+    WHERE tags.cuisine IS NOT NULL AND tags.cuisine ILIKE '%sushi%' AND amenities.amenity='restaurant')
+SELECT
+    AVG(purchases.amount) AS avg,
+    MEDIAN(purchases.amount) AS median,
+    in_vancouver
+FROM purchases
+JOIN amenities ON amenities.amenid = purchases.amenid
+JOIN customers ON customers.custid = purchases.custid
+JOIN vancouver_custs ON vancouver_custs.custid = customers.custid AND vancouver_custs.custid = purchases.custid
+WHERE amenities.amenid IN (SELECT amenid FROM sushi)
+GROUP BY vancouver_custs.in_vancouver
+ORDER BY vancouver_custs.in_vancouver;
+
+4. What was the average purchase per day for the first five days of August?
+
+NOTE TO MARKER: I overheard Greg Baker saying to students in the class that he felt as though the median was a better estimate of the 
+average. As such, I computed both (since it was easy enough to do). If I have left this in with both, it is because I did not get a 
+chance to ask him what he preferred.
+
+a. An answer to the original question in prose:
+
+The average (mean) purchase per day on the 1st day of August was 96.59, while the median was 30.63.
+The average (mean) purchase per day on the 2nd day of August was 106.56, while the median was 31.20.
+The average (mean) purchase per day on the 3nd day of August was 95.87, while the median was 30.49.
+The average (mean) purchase per day on the 4nd day of August was 115.50, while the median was 33.14.
+The average (mean) purchase per day on the 5nd day of August was 95.67, while the median was 28.97.
+
+Results:
+
+pdate		avg	median
+2021-08-01	96.59	30.63	
+2021-08-02	106.56	31.2	
+2021-08-03	95.87	30.49	
+2021-08-04	115.5	33.14	
+2021-08-05	95.67	28.97	
+
+b. A SQL query for Redshift to support your answer for component a:
+
+SELECT pdate, AVG(amount), MEDIAN(amount)
+FROM purchases
+WHERE DATE_PART(day, purchases.pdate) <= 5 AND DATE_PART(month, purchases.pdate) = 08
+GROUP BY purchases.pdate
+ORDER BY purchases.pdate asc;
+
+c. What was the bytes / record ratio for Redshift on the 5-day query?
+
+Number of bytes: 94.06KB * 1000 = 94060 bytes
+Number of records: 4703
+
+bytes / record = 94060 / 4703 = 20 bytes/record
+
+d. What was the bytes / record ratio for Spectrum on the 5-day query?
+
+Number of bytes: 267396 bytes
+Number of records: 4703
+
+bytes / record = 267396 / 4703 = 56.856 bytes/record
+
+e. For this purchase dataset, the averages are 57 bytes/line and 968 lines/day. (It may be useful to explore the sfu-cmpt-732-redshift 
+bucket to derive these for yourself.) From these values, what might you infer about how Redshift scans the table? How Spectrum scans 
+the table?
+
+It seems reasonable to suspect that Redshift scans columns, while Spectrum scans rows. We can infer this by seeing that Redshift 
+requires 20 bytes/record, while Spectrum requires almost triple this at 57 bytes/record. Consider that the SELECT statement asks for 
+values from 2 of 6 columns in purchases: pdate and amount. Given that Redshift requires 2/6 = 1/3 the amount of bytes/record that 
+Spectrum does, we can derive that a single feature per record is somewhere around 10 bytes/record, hence Redshift appears to be 
+scanning columns (2 features * 10 bytes per record / feature = 20 bytes per record) while Spectrum seems to be scanning rows (6 
+features * 10 bytes per record / feature = 60 bytes per record).
+
+f. Based on these computations and the parallelism results, what properties of a dataset might make it well-suited to loading from S3 
+into Redshift before querying it?
+
+Data that is stored in a manner that is not easily parallelizable (not stored in expressly partitioned files designed for efficient 
+querying, for example) may be better suited to loading from S3 into Redshift before querying, since once it is there, we can exploit 
+Redshifts approach to column scanning. Redshift also seems to excel with structured, consistent datasets, suggesting that if the data 
+fits well into a relational model with a stable schema, it is well-suited for Redshift.
+
+g. Conversely, what properties of a dataset might make it well-suited to retaining in S3 and querying it using Spectrum?
+
+In contrast to my answer for f, data that is stored in a manner that is expressly partitioned across files in a manner designed for 
+efficient querying may be better suited to retaining in S3 and querying using Spectrum, since we will be able to exploit the mass 
+amounts of parallelism available to us. It also seems to be more elastic than Redshift: with redshift we have a need to adjust the 
+cluster size to increase the degree of parallelism, while Spectrum seems to handle these adjustments automatically. Spectrum also seems 
+to excel with unstructured, potentially non-normalized data: since it reads entire rows, if data is stored in a "joined" format it may 
+make sense to query directly from Spectrum since there is no need to exploit the structured relational aspects that Redshift excels at.

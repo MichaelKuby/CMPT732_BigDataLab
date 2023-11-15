@@ -21,14 +21,14 @@ def main(inputs, output):
     # Read csv files into the dataframe. These are partitioned subsets of the original GHCN data
     weather = spark.read.csv(inputs, schema=observation_schema)
 
-    # Filter out observations where the qflat is set to something other than Null
-    weather = weather.filter(weather['qflag'].isNull())
+    # Keep only observations where the qflag is Null
+    weather = weather.where(weather['qflag'].isNull())
 
     # Keep only records from stations that start with 'CA' (Canadian data)
-    weather = weather.filter(weather['station'].startswith('CA'))
+    weather = weather.where(weather['station'].startswith('CA'))
 
     # Keep only maximum temperature observations
-    weather = weather.filter(weather['observation'] == 'TMAX')
+    weather = weather.where(weather['observation'] == 'TMAX')
 
     # Divide the temperature by 10 to put it into C
     weather = weather.withColumn('tmax', weather['value'] / 10)

@@ -1,0 +1,165 @@
+1. What is your best guess for the slope and intercept of the streaming points being produced?
+
+After 50 iterations my best guess is as follows:
+
+Batch: 558
+-------------------------------------------
++------------------+------------------+
+|              Beta|             Alpha|
++------------------+------------------+
+|-7.355265188187736|33.125878543035526|
++------------------+------------------+
+
+
+2. Is your streaming program's estimate of the slope and intercept getting better as the program runs? (That is: is the program 
+aggregating all of the data from the start of time, or only those that have arrived since the last output?)
+
+From what I understand, the program is aggregating all of the data from the start of time to produce these values, and so the slope and 
+intercept values are getting better as the program runs. This seems to be evident if we look at the first few iterations in comparison 
+to what we see after it has been running for a while.
+
+-------------------------------------------
+Batch: 1
+-------------------------------------------
++------------------+-----------------+
+|              Beta|            Alpha|
++------------------+-----------------+
+|-7.355132845999903|32.36305154776187|
++------------------+-----------------+
+
+-------------------------------------------
+Batch: 2
+-------------------------------------------
++------------------+-----------------+
+|              Beta|            Alpha|
++------------------+-----------------+
+|-7.354100096613411|30.41012577000538|
++------------------+-----------------+
+
+-------------------------------------------
+Batch: 3
+-------------------------------------------
++------------------+------------------+
+|              Beta|             Alpha|
++------------------+------------------+
+|-7.355665191691712|30.600762249446234|
++------------------+------------------+
+
+-------------------------------------------
+Batch: 4
+-------------------------------------------
++------------------+-----------------+
+|              Beta|            Alpha|
++------------------+-----------------+
+|-7.354160769882194|31.13672349798412|
++------------------+-----------------+
+
+Notice how on these first few iterations, the values for alpha vary fairly significantly, bouncing from 32, to 30, then back up to 31. 
+Now if we compare this against the later batches, we see something considerably different. Our Beta value seems to converge around 
+-7.355, while our Alpha value seems to converge around 33.1 (although, it seems like the value in the tenths spot was still bouncing 
+around between 1 and 2 before the program ended). We can see those results here:
+
+Batch: 555
+-------------------------------------------
++------------------+-----------------+
+|              Beta|            Alpha|
++------------------+-----------------+
+|-7.355311667535963|33.14080858278304|
++------------------+-----------------+
+
+-------------------------------------------
+Batch: 556
+-------------------------------------------
++------------------+-----------------+
+|              Beta|            Alpha|
++------------------+-----------------+
+|-7.355277840760783|33.12825770025263|
++------------------+-----------------+
+
+-------------------------------------------
+Batch: 557
+-------------------------------------------
++------------------+-----------------+
+|              Beta|            Alpha|
++------------------+-----------------+
+|-7.355272609324626|33.13359858042969|
++------------------+-----------------+
+
+-------------------------------------------
+Batch: 558
+-------------------------------------------
++------------------+------------------+
+|              Beta|             Alpha|
++------------------+------------------+
+|-7.355265188187736|33.125878543035526|
++------------------+------------------+
+
+
+3. In the colour classification question, what were your validation scores for the RGB and LAB pipelines?
+
+Validation score for RGB model: 0.696372
+Validation score for LAB model: 0.7539432176656151
+
+
+4. When predicting the tmax values, did you over-fit the training data (and for which training/validation sets)?
+
+Originally, when working on the Tmax-1 dataset locally, I definitely overfit the data. Here were my results:
+
+TMAX-1 dataset:
+
+Validation scores:
+r2 = 0.8848161764006277
+
+Test scores: 
+r2 = 0.5768628693401223
+rmse = 8.437480451235238
+
+I was unable to bring the test scores any higher on the tmax-1 dataset. I was interested to see how these same parameters would work on 
+a larger dataset, however, so I trained and evaluated my model on tmax-2 on the cluster. My findings were quite interesting!
+
+TMAX-2 Dataset (Trained and evaluated on the cluster):
+
+Validation score:
+r2 = 0.8289261044412854
+
+Test scores:
+r2 = 0.80233499542834
+rmse = 5.766829410616863
+
+This clearly showed that by simply training on more data, the model was able to generalize MUCH better.
+
+
+5. What were your testing scores for your model with and without the “yesterday's temperature” feature?
+
+My testing scores without:
+
+r2 = 0.80233499542834 
+rmse = 5.766829410616863
+
+My testing scores with:
+
+r2 = 0.9146837366764831
+rmse = 3.7763155044570036
+
+6. If you're using a tree-based model, you'll find a .featureImportances property that describes the relative importance of each 
+feature (code commented out in weather_test.py; if not, skip this question). Have a look with and without the “yesterday's temperature” 
+feature: do the results make sense and suggest that your model is making decisions reasonably? With “yesterday's temperature”, is it 
+just predicting “same as yesterday”?
+
+I am using a tree-based model. From the output of .featureImportances we can see that the majority of the output is coming from 
+"yesterday's temperature", although not all of it. When yesterday's temperature is included in the features, it places a very high 
+importance score on it (72.62%), and spreads 13.25% and 11.97% across the day of the year and the latitude. When yesterday's 
+temperature is not included, it leans most heavily on the day of the year (51.82%) and latitude (38.07%). From this analysis we can see 
+that the model sees as the three most important features: yesterday's temperature, date of the year, and latitude.
+
+Results with "yesterday's temperature':
+
+r2 = 0.914683736676483
+rmse = 3.776315504457012
+(5,[0,1,2,3,4],[0.1324932959433915,0.11976660205716057,0.014573745548117174,0.006924221725930261,0.7262421347254003])
+
+results without "yesterday's temperature":
+
+r2 = 0.8023349954283401
+rmse = 5.766829410616863
+(4,[0,1,2,3],[0.5181597107573266,0.3807448568155149,0.0593006345455882,0.0417947978815703])

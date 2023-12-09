@@ -105,9 +105,9 @@ a. An answer to the original question in prose:
 
 The average (mean) purchase per day on the 1st day of August was 96.59, while the median was 30.63.
 The average (mean) purchase per day on the 2nd day of August was 106.56, while the median was 31.20.
-The average (mean) purchase per day on the 3nd day of August was 95.87, while the median was 30.49.
-The average (mean) purchase per day on the 4nd day of August was 115.50, while the median was 33.14.
-The average (mean) purchase per day on the 5nd day of August was 95.67, while the median was 28.97.
+The average (mean) purchase per day on the 3rd day of August was 95.87, while the median was 30.49.
+The average (mean) purchase per day on the 4th day of August was 115.50, while the median was 33.14.
+The average (mean) purchase per day on the 5th day of August was 95.67, while the median was 28.97.
 
 Results:
 
